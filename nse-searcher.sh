@@ -357,32 +357,33 @@ argument_parser(){
 
 argument_checker(){
     ## Checking nmap installation
-    argument_checker_prerequisites
+    argument_checker_requeriments
 
-    ## Checking files integrity
-    argumentCheckFileIntegrity
+    ## Checking files
+    argument_checker_nmap_files
 }
 
-argument_checker_prerequisites(){
-    status=2
-    # Test 1 using which
-    if [[ -n `which nmap` ]];then
-	status=1
-    fi
-    # Test 2 using apt
-    if [[ -n `apt-cache policy nmap` ]];then
-	status=0
-    fi
-    $(test $status -eq 2)&& ERROR "argumentCheckerNmap" "nmap seems not to be installed"
-    if [[ $status -eq 1 ]];then
-	echo "[*] Nmap installation found, but not using apt-cache. [MAY BE A FAKE ONE]"
+argument_checker_requeriments(){
+    ## nmap installation check
+    which nmap &>/dev/null
+    if [[ $? -ne 0 ]];then # using which
+	apt-cache policy nmap &>/dev/null
+	if [[ $? -ne 0 ]];then # using apt
+	    pacman -Q nmap &>/dev/null
+	    if [[ $? -ne 0 ]];then # using nmap
+		ERROR "argument_checker_requeriments" "nmap is not installed"
+	    fi
+	fi
     fi
 }
 
-argumentCheckFileIntegrity(){
+argument_checker_nmap_files(){
+    ## Checking /usr/share/nmap/scripts files
     local lista=("$NSE_SCRIPTS" "$NSE_SERVICES" "$NSE_PROTOCOLS" "$NSE_MAC")
-    for i in `seq 0 $((${#lista[@]} - 1))`;do
-	$(test -e ${lista[$i]})|| ERROR "argumentCheckFileIntegrity" "Can't find nmap file ${lista[$i]}"
+    for i in ${lista[@]};do
+	if [[ ! -e $i ]];then
+	    ERROR "argument_checker_nmap_files" "Can't find nmap file $i"
+	fi
     done
 }
 
@@ -390,11 +391,26 @@ argumentCheckFileIntegrity(){
 ##   PROCESSING AREA       ##
 #############################
 
-argumentProcessor(){
-    $(test -n "$SCRIPT")&& printFile "$NSE_SCRIPTS" "$SCRIPT"
-    $(test -n "$SERVICE")&& printFile "$NSE_SERVICES" "$SERVICE"
-    $(test -n "$PROTOCOL")&& printFile "$NSE_PROTOCOLS" "$PROTOCOL"
-    $(test -n "$MAC")&& printFile "$NSE_MAC" "$MAC"
+argument_processor(){
+    ## Processing script
+    if [[ -n "$SCRIPT" ]];then
+	printFile "$NSE_SCRIPTS" "$SCRIPT"
+    fi
+
+    ## Processing SERVICE
+    if [[ -n "$SERVICE" ]];then
+	printFile "$NSE_SERVICES" "$SERVICE"
+    fi
+
+    ## Processing PROTOCOL
+    if [[ -n "$PROTOCOL" ]];then
+	printFile "$NSE_PROTOCOLS" "$PROTOCOL"
+    fi
+
+    ## Processing MAC
+    if [[ -n "$MAC" ]];then
+	printFile "$NSE_MAC" "$MAC"
+    fi
 }
 
 printFile(){
@@ -402,15 +418,15 @@ printFile(){
     # $2 = PATTERN
     echo -e "\e[0;31m[*] Listing matches found in $NSE_SCRIPTS:\e[0m"    
     if [[ -d $1 ]];then    
-	ls "$1" | grep --ignore-case "$2" | nl
+	ls "$1" | grep --ignore-case "$2" --color=always | nl
     else
-	cat "$1" | grep --ignore-case "$2" | nl
+	cat "$1" | grep --ignore-case "$2" --color=always | tr "\t" " " | nl
     fi
 }
 
 banner
 argument_parser "$@"
 argument_checker
-argumentProcessor
+argument_processor
 exit 0
 
