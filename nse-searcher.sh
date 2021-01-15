@@ -325,6 +325,33 @@ ERROR(){
     exit 1
 }
 
+check_updates(){
+    ## Updating remote repo
+    git remote update
+    if [[ $? -ne 0 ]];then
+	echo "[!] Unable to update remote repo"
+	return 0
+    fi
+
+    if [[ -n $( git status -uno | grep -o "Your branch is behind" ) ]];then
+	echo "[#] Updates are available..."
+	select var in Update Continue Exit
+	do
+	    if [[ $var == "Update" ]];then     # Updating program
+		git pull origin master
+		echo "[!] Program is updated"
+		exit 0
+	    elif [[ $var == "Continue" ]];then # Continue execution Normally
+		break
+	    elif [[ $var == "Exit" ]];then     # Exit
+		exit 0
+	    fi
+	done
+    fi
+
+    return 0
+}
+
 argument_parser(){
     ## help if there is no arguments
     if [[ $# -eq 0 ]];then
@@ -424,6 +451,7 @@ printFile(){
     fi
 }
 
+check_updates
 banner
 argument_parser "$@"
 argument_checker
