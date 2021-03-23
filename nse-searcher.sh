@@ -30,6 +30,8 @@
 VERSION="[v1.00]"
 AUTHOR="mind2hex"
 
+
+NSE_SCRIPTS_DB="/usr/share/nmap/scripts/script.db"
 NSE_SCRIPTS='/usr/share/nmap/scripts/' #directory
 NSE_SERVICES='/usr/share/nmap/nmap-services' #file
 NSE_PROTOCOLS='/usr/share/nmap/nmap-protocols' #file
@@ -388,6 +390,9 @@ argument_checker(){
 
     ## Checking files
     argument_checker_nmap_files
+
+    ## Checking script existence
+    argument_checker_script_existence
 }
 
 argument_checker_requeriments(){
@@ -414,6 +419,13 @@ argument_checker_nmap_files(){
     done
 }
 
+argument_checker_script_existence(){
+    ## Checking if $SCRIPT string exist inside /usr/share/nmap/scripts/script.db
+    if [[ -z $(cat $NSE_SCRIPTS_DB | grep -o "$SCRIPT") ]];then
+	ERROR "argument_checker_script_existence" "No entries matched inside script.db"
+    fi
+}
+
 #############################
 ##   PROCESSING AREA       ##
 #############################
@@ -421,7 +433,12 @@ argument_checker_nmap_files(){
 argument_processor(){
     ## Processing script
     if [[ -n "$SCRIPT" ]];then
-	printFile "$NSE_SCRIPTS" "$SCRIPT"
+	category_check "$SCRIPT"
+	if [[ $result_code -eq 0 ]];then
+	    parse_filename_print_DB "$SCRIPT"
+	else
+	    parse_category_print_DB "$SCRIPT"
+	fi
     fi
 
     ## Processing SERVICE
@@ -439,6 +456,59 @@ argument_processor(){
 	printFile "$NSE_MAC" "$MAC"
     fi
 }
+
+category_check(){
+    ## Check if the user is searching for script or category
+    category_list=("auth" "broadcast" "brute" "default" "discovery" "dos" \
+			 "exploit" "external" "fuzzer" "intrusive" "malware" \
+			 "safe" "version" "vuln")
+    aux=$(echo "${category_list[@]}" | grep -o "$1")
+    if [[ -z ${aux}  ]];then
+	result_code=0
+    else
+	result_code=1
+    fi
+
+ }
+    
+parse_filename_print_DB(){
+    ## Extracting Filename
+    filename=( $(cat "$NSE_SCRIPTS_DB" | tr -d "\"" | \
+		   grep -o -E "filename = .*${1}[a-zA-Z0-9\-]*" | \
+		   cut -d " " -f 3 | tr "\n" " ") )
+    
+    ## Extracting category
+    category=($(cat "$NSE_SCRIPTS_DB" | tr -d "\"" | grep "${1}" | \
+		    grep -o -E "categories = \{[0-9a-zA-Z\ \,]*\}" | \
+		    tr " " "?" | tr "\n" " "))
+    loop_num=$((${#category[@]} - 1))
+    for i in $(seq 0 $loop_num);do
+	category[$i]=$(echo "${category[$i]}" | tr "?" " ")
+    done
+    
+    ## Printing formated output
+    for i in $(seq 0 "$loop_num");do
+	printf "%-35s %-30s\n" "${filename[$i]}" "${category[$i]}"
+    done | nl | grep "$1" --color=always
+    
+}
+
+parse_category_print_DB(){
+    filename=($(cat "$NSE_SCRIPTS_DB" | grep $1 | cut -d " " -f 5 | tr -d "\"" | tr -d "," | cut -d "." -f 1))
+    category=($(cat "$NSE_SCRIPTS_DB" | grep $1 | cut -d " " -f 6- | tr -d "\""  | tr " " "?" ))
+    loop_num=$((${#category[@]} - 1))
+    for i in $(seq 0 $loop_num);do
+	category[$i]=$(echo "${category[$i]}" | tr "?" " ")
+    done    
+
+    ## Printing formated output
+    for i in $(seq 0 "$loop_num");do
+	printf "%-35s %-30s\n" "${filename[$i]}" "${category[$i]}"
+    done | nl | grep "$1" --color=always
+    
+}
+
+ 
 
 printFile(){
     # $1 = FILEPATH
@@ -458,3 +528,4 @@ argument_checker
 argument_processor
 exit 0
 
+## Do a online search utility
